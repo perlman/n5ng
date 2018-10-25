@@ -9,39 +9,32 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-def get_scales(dataset_name, scales, res=np.array([4,4,40]), encoding='raw'):
+def get_scales(dataset_name, scales, encoding='raw'):
+    def get_scale_for_dataset(dataset):
+        return {
+                    'chunk_sizes': [dataset.chunks],
+                    'resolution': dataset.attrs.get('resolution', [1.0,1.0,1.0]),
+                    'size': dataset.shape,
+                    'key': '0',
+                    'encoding': encoding,
+                    'voxel_offset': dataset.attrs.get('offset', [0,0,0]),
+                }
+                
     if  scales:
         # Assumed scale pyramid with the convention dataset/sN, where N is the scale level
         scale_info = []
         for scale in scales:
             try:
                 dataset_name_with_scale = "%s/s%d" % (dataset_name, scale)
-                print(dataset_name_with_scale)
                 dataset = app.config['n5file'][dataset_name_with_scale]
-                this_scale = {
-                    'chunk_sizes': [dataset.chunks],
-                    'resolution': (res * 1.0).tolist(),
-                    'size': dataset.shape,
-                    'key': '0',
-                    'encoding': encoding,
-                    'voxel_offset': [0,0,0],
-                }
-                scale_info.append(this_scale)
-            except:
+                this_scale = scale_info.append(get_scale_for_dataset(dataset))
+            except Exception as exc:
+                print(exc)
                 pass
     else:
         dataset = app.config['n5file'][dataset_name]
         # No scale pyramid for this dataset
-        scale_info = [
-            {
-                'chunk_sizes': [dataset.chunks],
-                'resolution': (res * 1.0).tolist(),
-                'size': dataset.shape,
-                'key': '0',
-                'encoding': encoding,
-                'voxel_offset': [0,0,0],
-            }
-        ]       
+        scale_info = [ get_scale_for_dataset(dataset) ]       
     return scale_info
 
 @app.route('/<path:dataset_name>/info')
@@ -51,7 +44,7 @@ def dataset_info(dataset_name):
         'data_type' : 'uint8',
         'type': 'image',
         'num_channels' : 1,
-        'scales' : get_scales(dataset_name, scales=[0])
+        'scales' : get_scales(dataset_name, scales=list(range(0,10)))
         
     }
     return jsonify(info)
