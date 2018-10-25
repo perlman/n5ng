@@ -1,0 +1,7 @@
+name: n5ng
+channels:
+  - conda-forge
+dependencies:
+  - flask
+  - flask-cors
+  - z5py
