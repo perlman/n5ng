@@ -9,17 +9,24 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-def get_scales(dataset_name, scales, encoding='raw'):
-    def get_scale_for_dataset(dataset):
+def get_scales(dataset_name, scales, encoding='raw', base_res=np.array([1.0,1.0,1.0])):
+    def get_scale_for_dataset(dataset, scale, base_res):
+        if 'resolution' in dataset.attrs:
+            resolution = dataset.attrs['resolution']
+        elif 'downsamplingFactors' in dataset.attrs:
+            # The FAFB n5 stack reports downsampling, not absolute resolution
+            resolution = (base_res * np.asarray(dataset.attrs['downsamplingFactors'])).tolist()
+        else:
+            resolution = (base_res*scale).tolist()
         return {
-                    'chunk_sizes': [dataset.chunks],
-                    'resolution': dataset.attrs.get('resolution', [1.0,1.0,1.0]),
-                    'size': dataset.shape,
+                    'chunk_sizes': [list(reversed(dataset.chunks))],
+                    'resolution': resolution,
+                    'size': list(reversed(dataset.shape)),
                     'key': '0',
                     'encoding': encoding,
                     'voxel_offset': dataset.attrs.get('offset', [0,0,0]),
                 }
-                
+
     if  scales:
         # Assumed scale pyramid with the convention dataset/sN, where N is the scale level
         scale_info = []
@@ -27,14 +34,13 @@ def get_scales(dataset_name, scales, encoding='raw'):
             try:
                 dataset_name_with_scale = "%s/s%d" % (dataset_name, scale)
                 dataset = app.config['n5file'][dataset_name_with_scale]
-                this_scale = scale_info.append(get_scale_for_dataset(dataset))
+                this_scale = scale_info.append(get_scale_for_dataset(dataset, 1/2**scale, base_res))
             except Exception as exc:
                 print(exc)
-                pass
     else:
         dataset = app.config['n5file'][dataset_name]
         # No scale pyramid for this dataset
-        scale_info = [ get_scale_for_dataset(dataset) ]       
+        scale_info = [ get_scale_for_dataset(dataset, 1.0, base_res) ]       
     return scale_info
 
 @app.route('/<path:dataset_name>/info')
@@ -44,7 +50,7 @@ def dataset_info(dataset_name):
         'data_type' : 'uint8',
         'type': 'image',
         'num_channels' : 1,
-        'scales' : get_scales(dataset_name, scales=list(range(0,10)))
+        'scales' : get_scales(dataset_name, scales=list(range(0,8)), base_res=np.array([4.0, 4.0, 40.0]))
         
     }
     return jsonify(info)
@@ -55,8 +61,10 @@ def get_data(dataset_name, scale, x1, x2, y1, y2, z1, z2):
     # TODO: Enforce a data size limit
     dataset_name_with_scale = "%s/s%d" % (dataset_name, scale)
     dataset = app.config['n5file'][dataset_name_with_scale]
-    data = dataset[x1:x2,y1:y2,z1:z2]
-    return Response(data.tobytes(order='F'), mimetype='application/octet-stream')
+    # z5py 
+    data = dataset[z1:z2,y1:y2,x1:x2]
+    # Neuroglancer expects an x,y,z array in Fortram order (e.g., z,y,x in C =)
+    return Response(data.tobytes(order='C'), mimetype='application/octet-stream')
 
 
 def main():
