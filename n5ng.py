@@ -19,12 +19,12 @@ def get_scales(dataset_name, scales, encoding='raw', base_res=np.array([1.0,1.0,
             # The FAFB n5 stack reports downsampling, not absolute resolution
             resolution = (base_res * np.asarray(dataset.attrs['downsamplingFactors'])).tolist()
         else:
-            resolution = (base_res*scale).tolist()
+            resolution = (base_res*2**scale).tolist()
         return {
                     'chunk_sizes': [list(reversed(dataset.chunks))],
                     'resolution': resolution,
                     'size': list(reversed(dataset.shape)),
-                    'key': '0',
+                    'key': str(scale),
                     'encoding': encoding,
                     'voxel_offset': dataset.attrs.get('offset', [0,0,0]),
                 }
@@ -36,7 +36,7 @@ def get_scales(dataset_name, scales, encoding='raw', base_res=np.array([1.0,1.0,
             try:
                 dataset_name_with_scale = "%s/s%d" % (dataset_name, scale)
                 dataset = app.config['n5file'][dataset_name_with_scale]
-                this_scale = scale_info.append(get_scale_for_dataset(dataset, 1/2**scale, base_res))
+                this_scale = scale_info.append(get_scale_for_dataset(dataset, scale, base_res))
             except Exception as exc:
                 print(exc)
     else:
