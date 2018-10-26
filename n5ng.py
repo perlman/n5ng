@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
+import gzip
+import io
 import z5py
 import numpy as np
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify, Response, request
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -64,7 +66,23 @@ def get_data(dataset_name, scale, x1, x2, y1, y2, z1, z2):
     # z5py 
     data = dataset[z1:z2,y1:y2,x1:x2]
     # Neuroglancer expects an x,y,z array in Fortram order (e.g., z,y,x in C =)
-    return Response(data.tobytes(order='C'), mimetype='application/octet-stream')
+    response = Response(data.tobytes(order='C'), mimetype='application/octet-stream')
+
+    accept_encoding = request.headers.get('Accept-Encoding', '')
+    if 'gzip' not in accept_encoding.lower() or \
+           'Content-Encoding' in response.headers:
+            return response
+
+    gzip_buffer = io.BytesIO()
+    gzip_file = gzip.GzipFile(mode='wb', compresslevel=5, fileobj=gzip_buffer)
+    gzip_file.write(response.data)
+    gzip_file.close()
+    response.data = gzip_buffer.getvalue()
+    response.headers['Content-Encoding'] = 'gzip'
+    response.headers['Content-Length'] = len(response.data)
+
+    return response
+
 
 
 def main():
