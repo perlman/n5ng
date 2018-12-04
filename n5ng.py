@@ -47,7 +47,6 @@ def get_scales(dataset_name, scales, encoding='raw', base_res=np.array([1.0,1.0,
 
 @app.route('/<path:dataset_name>/info')
 def dataset_info(dataset_name):
-    dataset = app.config['n5file'][dataset_name]
     info = {
         'data_type' : 'uint8',
         'type': 'image',
