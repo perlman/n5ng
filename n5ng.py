@@ -3,7 +3,7 @@
 import argparse
 import gzip
 import io
-import z5py
+import zarr
 import numpy as np
 from flask import Flask, jsonify, Response, request
 from flask_cors import CORS
@@ -53,7 +53,6 @@ def dataset_info(dataset_name):
         'type': 'image',
         'num_channels' : 1,
         'scales' : get_scales(dataset_name, scales=list(range(0,8)), base_res=np.array([4.0, 4.0, 40.0]))
-        
     }
     return jsonify(info)
 
@@ -63,7 +62,6 @@ def get_data(dataset_name, scale, x1, x2, y1, y2, z1, z2):
     # TODO: Enforce a data size limit
     dataset_name_with_scale = "%s/s%d" % (dataset_name, scale)
     dataset = app.config['n5file'][dataset_name_with_scale]
-    # z5py 
     data = dataset[z1:z2,y1:y2,x1:x2]
     # Neuroglancer expects an x,y,z array in Fortram order (e.g., z,y,x in C =)
     response = Response(data.tobytes(order='C'), mimetype='application/octet-stream')
@@ -83,14 +81,13 @@ def get_data(dataset_name, scale, x1, x2, y1, y2, z1, z2):
 
     return response
 
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('filename', help='n5 file to share', default='sample.n5')
     args = parser.parse_args()
 
-    n5f = z5py.file.N5File(args.filename, mode='r')
+    # n5f = z5py.file.N5File(args.filename, mode='r')
+    n5f = zarr.open(args.filename, mode='r')
 
     # Start flask
     app.debug = True
