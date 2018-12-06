@@ -7,6 +7,7 @@ import zarr
 import numpy as np
 from flask import Flask, jsonify, Response, request
 from flask_cors import CORS
+from PIL import Image
 
 app = Flask(__name__)
 CORS(app)
@@ -79,6 +80,32 @@ def get_data(dataset_name, scale, x1, x2, y1, y2, z1, z2):
     response.headers['Content-Length'] = len(response.data)
 
     return response
+
+# Implement the CATMAID LargeDataTileSource source, with the addition of X,Y in the path
+#  CATMAID.LargeDataTileSource.prototype.getTileURL = function (
+#      project, stack, slicePixelPosition, col, row, zoomLevel) {
+#    var baseName = CATMAID.getTileBaseName(slicePixelPosition);
+#    return this.baseURL + zoomLevel + '/' + baseName + row + '/' +  col + '.' +
+#       this.fileExtension;
+
+@app.route('/<path:dataset_name>/<int:tileWidth>,<int:tileHeight>/<int:scale>/<int:z>/<int:row>/<int:col>.<string:format>')
+def get_catmaid_tile(dataset_name, tileWidth, tileHeight, scale, z, row, col, format):
+    dataset_name_with_scale = "%s/s%d" % (dataset_name, scale)
+    dataset = app.config['n5file'][dataset_name_with_scale]
+    # TODO: Adjust Z for downscaled resolutions
+    data = dataset[z:z+1, row*tileHeight:(row+1)*tileHeight, col*tileWidth:(col+1)*tileWidth]
+    data = data.reshape((tileWidth, tileHeight))
+    # TODO: Do we need to reshape?
+
+    imgarray = np.zeros((1024, 1024, 3), dtype=np.uint8)
+    imgarray[:,:,1] = data
+    im = Image.fromarray(imgarray)
+
+    with io.BytesIO() as output:
+        im.save(output, format='jpeg', quality=75)
+        response = Response(output.getvalue(), mimetype='image/jpeg')
+        return response
+
 
 def main():
     parser = argparse.ArgumentParser()
