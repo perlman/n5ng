@@ -82,28 +82,28 @@ def get_data(dataset_name, scale, x1, x2, y1, y2, z1, z2):
     return response
 
 # Implement the CATMAID LargeDataTileSource source, with the addition of X,Y in the path
-#  CATMAID.LargeDataTileSource.prototype.getTileURL = function (
-#      project, stack, slicePixelPosition, col, row, zoomLevel) {
-#    var baseName = CATMAID.getTileBaseName(slicePixelPosition);
-#    return this.baseURL + zoomLevel + '/' + baseName + row + '/' +  col + '.' +
-#       this.fileExtension;
-
+#
+# CATMAID expects binary downsampling. As-is, this code will only work correctly at resolutions
+# where all Z layers are present.
 @app.route('/<path:dataset_name>/<int:tileWidth>,<int:tileHeight>/<int:scale>/<int:z>/<int:row>/<int:col>.<string:format>')
 def get_catmaid_tile(dataset_name, tileWidth, tileHeight, scale, z, row, col, format):
     dataset_name_with_scale = "%s/s%d" % (dataset_name, scale)
     dataset = app.config['n5file'][dataset_name_with_scale]
-    # TODO: Adjust Z for downscaled resolutions
+    # FAFB Z size at various scales: 0=7062, 1=7062, 2=7062, 3=7062, 4=3531, 5=2354, 6=1177, 7=520
+    if scale == 4:
+        z = z//2
     data = dataset[z:z+1, row*tileHeight:(row+1)*tileHeight, col*tileWidth:(col+1)*tileWidth]
     data = data.reshape((tileWidth, tileHeight))
-    # TODO: Do we need to reshape?
 
-    imgarray = np.zeros((1024, 1024, 3), dtype=np.uint8)
+    imgarray = np.zeros((tileWidth, tileHeight, 4), dtype=np.uint8)
+    # imgarray[:,:,3] = data
+    imgarray[:,:,3] = (data > 100) * 255
     imgarray[:,:,1] = data
     im = Image.fromarray(imgarray)
 
     with io.BytesIO() as output:
-        im.save(output, format='jpeg', quality=75)
-        response = Response(output.getvalue(), mimetype='image/jpeg')
+        im.save(output, format='png')
+        response = Response(output.getvalue(), mimetype='image/png')
         return response
 
 
