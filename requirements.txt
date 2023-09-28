@@ -1,3 +1,4 @@
 flask
 flask-cors
-git+git://github.com/funkey/zarr@master
+zarr
+ome-zarr
